@@ -218,7 +218,7 @@ impl SyntaxNode {
         let file_content =
             db.file_content(self.stable_ptr(db).file_id(db)).expect("Failed to read file content");
 
-        self.span(db).take(&file_content).to_string()
+        self.relativize_span(self.span(db), db).take(&file_content).to_string()
     }
 
     /// Returns all the text under the syntax node.
@@ -293,7 +293,7 @@ impl SyntaxNode {
     pub fn get_text_without_trivia(self, db: &dyn SyntaxGroup) -> String {
         let file_content =
             db.file_content(self.stable_ptr(db).file_id(db)).expect("Failed to read file content");
-        self.span_without_trivia(db).take(&file_content).to_string()
+        self.relativize_span(self.span_without_trivia(db), db).take(&file_content).to_string()
     }
 
     /// Returns the text under the syntax node, according to the given span.
@@ -417,6 +417,17 @@ impl SyntaxNode {
     /// Gets the kind of the given node's grandrandparent if it exists.
     pub fn grandgrandparent_kind(&self, db: &dyn SyntaxGroup) -> Option<SyntaxKind> {
         Some(self.parent(db)?.parent(db)?.parent(db)?.kind(db))
+    }
+
+    fn relativize_span(&self, span: TextSpan, db: &dyn SyntaxGroup) -> TextSpan {
+        let syntax_root_offset =
+            self.ancestors_with_self(db).last().expect("Syntax root has to exist").offset(db);
+
+        let TextSpan { start, end } = span;
+        TextSpan {
+            start: (start - syntax_root_offset).as_offset(),
+            end: (end - syntax_root_offset).as_offset(),
+        }
     }
 }
 

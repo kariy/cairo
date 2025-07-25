@@ -1,0 +1,280 @@
+diff a/crates/cairo-lang-syntax/src/node/ast.rs b/crates/cairo-lang-syntax/src/node/ast.rs	(rejected hunks)
+@@ -2153,7 +2153,7 @@ impl TypedSyntaxNode for ExprPath {
+             kind,
+             SyntaxKind::ExprPath
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -2319,7 +2319,7 @@ impl TypedSyntaxNode for OptionTerminalDollarEmpty {
+             kind,
+             SyntaxKind::OptionTerminalDollarEmpty
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -6528,7 +6528,7 @@ impl TypedSyntaxNode for ExprPlaceholder {
+             kind,
+             SyntaxKind::ExprPlaceholder
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -20810,7 +20810,7 @@ impl TypedSyntaxNode for TokenTreeLeaf {
+             kind,
+             SyntaxKind::TokenTreeLeaf
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -20895,7 +20895,7 @@ impl TypedSyntaxNode for TokenTreeNode {
+             kind,
+             SyntaxKind::TokenTreeNode
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -21016,7 +21016,7 @@ impl TypedSyntaxNode for TokenTreeRepetition {
+             kind,
+             SyntaxKind::TokenTreeRepetition
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -21112,7 +21112,7 @@ impl TypedSyntaxNode for TokenTreeParam {
+             kind,
+             SyntaxKind::TokenTreeParam
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -21340,7 +21340,7 @@ impl TypedSyntaxNode for TokenTreeMissing {
+             kind,
+             SyntaxKind::TokenTreeMissing
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -21552,7 +21552,7 @@ impl TypedSyntaxNode for WrappedTokenTreeMissing {
+             kind,
+             SyntaxKind::WrappedTokenTreeMissing
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -21654,7 +21654,7 @@ impl TypedSyntaxNode for ParenthesizedTokenTree {
+             kind,
+             SyntaxKind::ParenthesizedTokenTree
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -21756,7 +21756,7 @@ impl TypedSyntaxNode for BracedTokenTree {
+             kind,
+             SyntaxKind::BracedTokenTree
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -21858,7 +21858,7 @@ impl TypedSyntaxNode for BracketedTokenTree {
+             kind,
+             SyntaxKind::BracketedTokenTree
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -22210,7 +22210,7 @@ impl TypedSyntaxNode for ItemMacroDeclaration {
+             kind,
+             SyntaxKind::ItemMacroDeclaration
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -22389,7 +22389,7 @@ impl TypedSyntaxNode for MacroRule {
+             kind,
+             SyntaxKind::MacroRule
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -22478,7 +22478,7 @@ impl TypedSyntaxNode for ParamKind {
+             kind,
+             SyntaxKind::ParamKind
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -22643,7 +22643,7 @@ impl TypedSyntaxNode for OptionParamKindEmpty {
+             kind,
+             SyntaxKind::OptionParamKindEmpty
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -22745,7 +22745,7 @@ impl TypedSyntaxNode for MacroParam {
+             kind,
+             SyntaxKind::MacroParam
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -22862,7 +22862,7 @@ impl TypedSyntaxNode for MacroRepetition {
+             kind,
+             SyntaxKind::MacroRepetition
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -23032,7 +23032,7 @@ impl TypedSyntaxNode for OptionTerminalCommaEmpty {
+             kind,
+             SyntaxKind::OptionTerminalCommaEmpty
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -23244,7 +23244,7 @@ impl TypedSyntaxNode for MacroRepetitionOperatorMissing {
+             kind,
+             SyntaxKind::MacroRepetitionOperatorMissing
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -23329,7 +23329,7 @@ impl TypedSyntaxNode for ParamIdent {
+             kind,
+             SyntaxKind::ParamIdent
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -23410,7 +23410,7 @@ impl TypedSyntaxNode for ParamExpr {
+             kind,
+             SyntaxKind::ParamExpr
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -23594,7 +23594,7 @@ impl TypedSyntaxNode for MacroParamKindMissing {
+             kind,
+             SyntaxKind::MacroParamKindMissing
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -23880,7 +23880,7 @@ impl TypedSyntaxNode for MacroWrapper {
+             kind,
+             SyntaxKind::MacroWrapper
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -24089,7 +24089,7 @@ impl TypedSyntaxNode for ParenthesizedMacro {
+             kind,
+             SyntaxKind::ParenthesizedMacro
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -24191,7 +24191,7 @@ impl TypedSyntaxNode for BracedMacro {
+             kind,
+             SyntaxKind::BracedMacro
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -24289,7 +24289,7 @@ impl TypedSyntaxNode for BracketedMacro {
+             kind,
+             SyntaxKind::BracketedMacro
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -24391,7 +24391,7 @@ impl TypedSyntaxNode for LegacyExprInlineMacro {
+             kind,
+             SyntaxKind::LegacyExprInlineMacro
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -24505,7 +24505,7 @@ impl TypedSyntaxNode for LegacyItemInlineMacro {
+             kind,
+             SyntaxKind::LegacyItemInlineMacro
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -28126,7 +28126,7 @@ impl TypedSyntaxNode for TerminalMacro {
+             kind,
+             SyntaxKind::TerminalMacro
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
+@@ -32845,7 +32845,7 @@ impl TypedSyntaxNode for TerminalDollar {
+             kind,
+             SyntaxKind::TerminalDollar
+         );
+-        Self { children: node.get_children(db).into(), node }
++        Self { children: node.get_children(db), node }
+     }
+     fn cast(db: &dyn SyntaxGroup, node: SyntaxNode) -> Option<Self> {
+         let kind = node.kind(db);
