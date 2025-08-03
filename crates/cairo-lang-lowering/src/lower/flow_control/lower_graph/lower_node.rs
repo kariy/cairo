@@ -9,9 +9,11 @@ use super::LowerGraphContext;
 use crate::lower::block_builder::BlockBuilder;
 use crate::lower::context::{LoweredExpr, VarRequest};
 use crate::lower::flow_control::graph::{
-    ArmExpr, BindVar, BooleanIf, Deconstruct, EnumMatch, EvaluateExpr, FlowControlNode, NodeId
+    ArmExpr, BindVar, BooleanIf, Deconstruct, EnumMatch, EvaluateExpr, FlowControlNode, NodeId,
 };
-use crate::lower::{generators, lower_expr_to_var_usage, lower_tail_expr, lowered_expr_to_block_scope_end};
+use crate::lower::{
+    generators, lower_expr_to_var_usage, lower_tail_expr, lowered_expr_to_block_scope_end,
+};
 use crate::{MatchArm, MatchEnumInfo, MatchInfo, VarUsage};
 
 /// Lowers the node with the given [NodeId].
