@@ -36,3 +36,10 @@ impl<Input: std::hash::Hash + Eq + Clone> std::default::Default for Cache<Input>
         Self { cache: Default::default() }
     }
 }
+
+fn cached<'a, 'b, Input: std::hash::Hash + Eq + Clone>(
+    callback: &dyn Fn(&'a mut FlowControlGraphBuilder<'b>, Input) -> NodeId)
+     -> impl Fn(&'a mut FlowControlGraphBuilder<'b>, Input) -> NodeId + 'b {
+    let cache = Cache::default();
+    move |graph, input| cache.get_or_compute(callback, graph, input)
+}
