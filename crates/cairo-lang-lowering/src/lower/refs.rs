@@ -1,14 +1,16 @@
 use cairo_lang_defs::ids::MemberId;
 use cairo_lang_proc_macros::DebugWithDb;
 use cairo_lang_semantic::expr::fmt::ExprFormatter;
+use cairo_lang_semantic::expr::inference::InferenceError;
 use cairo_lang_semantic::usage::MemberPath;
-use cairo_lang_semantic::{self as semantic};
+use cairo_lang_semantic::{self as semantic, ConcreteTypeId, Member, TypeLongId};
 use cairo_lang_utils::ordered_hash_map::OrderedHashMap;
-use cairo_lang_utils::{extract_matches, try_extract_matches};
+use cairo_lang_utils::{Intern, extract_matches, try_extract_matches};
 use itertools::{Itertools, chain};
 
 use crate::VariableId;
 use crate::db::LoweringGroup;
+use crate::ids::LocationId;
 
 /// Information about members captured by the closure and their types.
 #[derive(Clone, Debug)]
@@ -18,6 +20,12 @@ pub struct ClosureInfo<'db> {
     pub members: OrderedHashMap<MemberPath<'db>, semantic::TypeId<'db>>,
     /// The types of the captured snapshot variables.
     pub snapshots: OrderedHashMap<MemberPath<'db>, semantic::TypeId<'db>>,
+}
+
+#[derive(Debug)] // TODO: remove this
+pub enum AssembleValueError<'db> {
+    Moved(MovedVar<'db>),
+    Missing,
 }
 
 #[derive(Clone, Default, Debug)]
@@ -60,9 +68,9 @@ impl<'db> SemanticLoweringMapping<'db> {
         &mut self,
         mut ctx: TContext,
         path: &MemberPath<'db>,
-    ) -> Option<VariableId> {
-        let value = self.break_into_value(&mut ctx, path)?;
-        Self::assemble_value(&mut ctx, value)
+    ) -> Result<VariableId, AssembleValueError<'db>> {
+        let value = self.break_into_value(&mut ctx, path).ok_or(AssembleValueError::Missing)?;
+        Self::assemble_value(&mut ctx, value).map_err(|moved| AssembleValueError::Moved(moved))
     }
 
     pub fn introduce(&mut self, path: MemberPath<'db>, var: VariableId) {
@@ -82,27 +90,51 @@ impl<'db> SemanticLoweringMapping<'db> {
         // is supported.
 
         let value = self.break_into_value(ctx, path)?;
+        println!("before: {:?}", value);
         *value = Value::Var(var);
+        println!("after: {:?}", value);
         Some(())
+    }
+
+    pub fn mark_as_used<TContext: StructRecomposer<'db>>(
+        &mut self,
+        mut ctx: TContext,
+        path: &MemberPath<'db>,
+        moved: MovedVar<'db>,
+    ) {
+        *self.break_into_value(&mut ctx, path).unwrap() = Value::MovedVar(moved);
     }
 
     fn assemble_value<TContext: StructRecomposer<'db>>(
         ctx: &mut TContext,
         value: &mut Value<'db>,
-    ) -> Option<VariableId> {
-        Some(match value {
-            Value::Var(var) => *var,
+    ) -> Result<VariableId, MovedVar<'db>> {
+        match value {
+            Value::Var(var) => Ok(*var),
             Value::Scattered(scattered) => {
-                let members = scattered
+                let members_res = scattered
                     .members
                     .iter_mut()
                     .map(|(_, value)| Self::assemble_value(ctx, value))
-                    .collect::<Option<_>>()?;
-                let var = ctx.reconstruct(scattered.concrete_struct_id, members);
-                *value = Value::Var(var);
-                var
+                    .collect::<Result<_, _>>();
+
+                match members_res {
+                    Ok(members) => {
+                        let var = ctx.reconstruct(scattered.concrete_struct_id, members);
+                        *value = Value::Var(var);
+                        Ok(var)
+                    }
+                    Err(MovedVar { ty: _, inference_error, last_use_location }) => {
+                        let y = TypeLongId::<'db>::Concrete(ConcreteTypeId::Struct(
+                            scattered.concrete_struct_id,
+                        ));
+                        let x = y.intern(ctx.db());
+                        Err(MovedVar { ty: x, inference_error, last_use_location })
+                    }
+                }
             }
-        })
+            Value::MovedVar(moved) => Err(moved.clone()),
+        }
     }
 
     fn break_into_value<TContext: StructRecomposer<'db>>(
@@ -127,11 +159,25 @@ impl<'db> SemanticLoweringMapping<'db> {
                 );
                 let scattered = Scattered { concrete_struct_id: *concrete_struct_id, members };
                 *parent_value = Value::Scattered(Box::new(scattered));
-
-                extract_matches!(parent_value, Value::Scattered).members.get_mut(member_id)
             }
-            Value::Scattered(scattered) => scattered.members.get_mut(member_id),
-        }
+            Value::MovedVar(MovedVar { ty: _, inference_error, last_use_location }) => {
+                let members = ctx.deconstruct_used(*concrete_struct_id);
+                let members = OrderedHashMap::from_iter(members.into_iter().map(|member| {
+                    (
+                        member.id,
+                        Value::MovedVar(MovedVar {
+                            ty: member.ty,
+                            inference_error: inference_error.clone(),
+                            last_use_location: last_use_location.clone(),
+                        }),
+                    )
+                }));
+                let scattered = Scattered { concrete_struct_id: *concrete_struct_id, members };
+                *parent_value = Value::Scattered(Box::new(scattered));
+            }
+            Value::Scattered(..) => {}
+        };
+        extract_matches!(parent_value, Value::Scattered).members.get_mut(member_id)
     }
 }
 
@@ -229,12 +275,17 @@ where
 /// from the list of values (keeping only the scattered values).
 /// This signals that inside this subtree, all values need to be remapped (because of the children
 /// of `v5`, which are marked by `?` above).
+// TODO: Doc return None.
 fn compute_remapped_variables<'db>(
     values: &[&Value<'db>],
     require_remapping: bool,
     parent_path: &MemberPath<'db>,
     remapped_callback: &mut impl FnMut(&MemberPath<'db>) -> VariableId,
 ) -> Value<'db> {
+    if let Some(x) = values.iter().find(|value| matches!(value, Value::MovedVar { .. })) {
+        return (*x).clone();
+    }
+
     if !require_remapping {
         // If all values are the same, no remapping is needed.
         let first_var = values[0];
@@ -309,6 +360,10 @@ pub trait StructRecomposer<'db> {
         concrete_struct_id: semantic::ConcreteStructId<'db>,
         value: VariableId,
     ) -> OrderedHashMap<MemberId<'db>, VariableId>;
+    fn deconstruct_used(
+        &mut self,
+        concrete_struct_id: semantic::ConcreteStructId<'db>,
+    ) -> Vec<Member<'db>>;
 
     fn deconstruct_by_types(
         &mut self,
@@ -322,7 +377,16 @@ pub trait StructRecomposer<'db> {
         members: Vec<VariableId>,
     ) -> VariableId;
     fn var_ty(&self, var: VariableId) -> semantic::TypeId<'db>;
-    fn db(&self) -> &dyn LoweringGroup;
+    fn db(&self) -> &'db dyn LoweringGroup;
+}
+
+#[derive(Clone, Debug, DebugWithDb, Eq, PartialEq)]
+#[debug_db(ExprFormatter<'db>)]
+pub struct MovedVar<'db> {
+    pub ty: semantic::TypeId<'db>,
+    pub inference_error: InferenceError<'db>,
+    /// The location of the last use of the moved variable.
+    pub last_use_location: LocationId<'db>,
 }
 
 /// An intermediate value for a member path.
@@ -334,6 +398,8 @@ enum Value<'db> {
     /// The value of the member path is not stored. If needed, it should be reconstructed from the
     /// member values.
     Scattered(Box<Scattered<'db>>),
+    /// Represents a non-copyable variable that was moved, and can no longer be used.
+    MovedVar(MovedVar<'db>),
 }
 
 impl<'db> std::fmt::Display for Value<'db> {
@@ -347,6 +413,7 @@ impl<'db> std::fmt::Display for Value<'db> {
                     scattered.members.values().map(|value| value.to_string()).join(", ")
                 )
             }
+            Value::MovedVar(..) => write!(f, "MovedVar"),
         }
     }
 }

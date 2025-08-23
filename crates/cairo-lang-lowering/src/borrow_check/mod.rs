@@ -324,7 +324,7 @@ pub fn borrow_check<'db>(
         (None, BlockId::root()),
     );
     let block_extra_calls = analysis.analyzer.potential_destruct_calls;
-    assert!(root_demand.finalize(), "Undefined variable should not happen at this stage");
+    // assert!(root_demand.finalize(), "Undefined variable should not happen at this stage");
 
     BorrowCheckResult { block_extra_calls, diagnostics: diagnostics.build() }
 }

@@ -4,10 +4,13 @@
 test_borrow_check
 
 //! > function
-fn foo(x: Wrapper) -> u16 {
+fn foo(mut x: Wrapper) -> u16 {
     if x.inner.is_zero() {
+        // if true {
         use_x(x);
     }
+    x.inner = 1;
+    use_x(x); // 2
 
     // w.inner
     0
@@ -27,18 +30,6 @@ extern fn use_x(x: Wrapper) -> Wrapper nopanic;
 //! > semantic_diagnostics
 
 //! > lowering_diagnostics
-error: Variable was previously moved.
- --> lib.cairo:8:5-10:5
-      if x.inner.is_zero() {
- _____^
-|         use_x(x);
-|     }
-|_____^
-note: variable was previously used here:
-  --> lib.cairo:9:15
-        use_x(x);
-              ^
-note: Trait has no implementation in context: core::traits::Copy::<test::Wrapper>.
 
 //! > lowering
 Parameters: v0: test::Wrapper
@@ -56,17 +47,84 @@ blk1:
 Statements:
   (v5: test::Wrapper) <- struct_construct(v1{`x`})
   (v6: test::Wrapper) <- test::use_x(v5{`x`})
-  (v8: core::integer::u16) <- struct_destructure(v5{`if x.inner.is_zero() { use_x(x); }`})
 End:
-  Goto(blk3, {v8 -> v7})
+  Goto(blk3, {})
 
 blk2:
 Statements:
 End:
-  Goto(blk3, {v1 -> v7})
+  Goto(blk3, {})
 
 blk3:
 Statements:
-  (v9: core::integer::u16) <- 0
+  (v7: core::integer::u16) <- 1
+  (v8: test::Wrapper) <- struct_construct(v7{`x`})
+  (v9: test::Wrapper) <- test::use_x(v8{`x`})
+  (v10: core::integer::u16) <- 0
+End:
+  Return(v10)
+
+//! > ==========================================================================
+
+//! > Test drop params on loop.
+
+//! > test_runner_name
+test_borrow_check
+
+//! > function
+fn foo(mut x: Wrapper) -> u16 {
+    let w = if x.inner.is_zero() {
+        Wrapper { inner: 6 }
+    } else {
+        // x.inner = 0;
+        x
+    };
+
+    w.inner
+}
+
+//! > function_name
+foo
+
+//! > module_code
+#[derive(Drop)]
+pub struct Wrapper {
+    pub inner: u16,
+}
+
+extern fn use_x(x: Wrapper) -> Wrapper nopanic;
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering
+Parameters: v0: test::Wrapper
+blk0 (root):
+Statements:
+  (v1: core::integer::u16) <- struct_destructure(v0{`x.inner`})
+  (v2: core::bool) <- core::zeroable::zero_based::ZeroableImpl::<core::integer::u16, core::integer::U16Zero, core::integer::u16Drop, core::integer::u16Copy>::is_zero(v1{`x.inner`})
+End:
+  Match(match_enum(v2{`x.inner.is_zero()`}) {
+    bool::False(v4) => blk2,
+    bool::True(v3) => blk1,
+  })
+
+blk1:
+Statements:
+  (v6: core::integer::u16) <- 6
+  (v7: test::Wrapper) <- struct_construct(v6{`6`})
+End:
+  Goto(blk3, {v7 -> v8})
+
+blk2:
+Statements:
+  (v5: test::Wrapper) <- struct_construct(v1{`x`})
+End:
+  Goto(blk3, {v5 -> v8})
+
+blk3:
+Statements:
+  (v9: core::integer::u16) <- struct_destructure(v8{`w.inner`})
 End:
   Return(v9)

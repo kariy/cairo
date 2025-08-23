@@ -105,9 +105,7 @@ pub fn lower_success_arm_body<'db>(
     let inputs: Vec<_> = vars
         .iter()
         .map(|(var_id, stable_ptr)| {
-            builder
-                .get_ref_raw(ctx, &MemberPath::Var(*var_id), ctx.get_location(*stable_ptr))
-                .unwrap()
+            builder.get_ref_raw(ctx, &MemberPath::Var(*var_id), *stable_ptr).unwrap()
         })
         .collect();
 

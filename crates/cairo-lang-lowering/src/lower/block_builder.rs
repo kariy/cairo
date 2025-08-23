@@ -1,11 +1,13 @@
 use cairo_lang_debug::DebugWithDb;
+use cairo_lang_defs::diagnostic_utils::StableLocation;
 use cairo_lang_defs::ids::{MemberId, NamedLanguageElementId};
-use cairo_lang_diagnostics::Maybe;
-use cairo_lang_semantic as semantic;
+use cairo_lang_diagnostics::{DiagnosticNote, Maybe};
 use cairo_lang_semantic::expr::fmt::ExprFormatter;
 use cairo_lang_semantic::types::{peel_snapshots, wrap_in_snapshots};
 use cairo_lang_semantic::usage::{MemberPath, Usage};
+use cairo_lang_semantic::{self as semantic, Member};
 use cairo_lang_syntax::node::TypedStablePtr;
+use cairo_lang_syntax::node::ids::SyntaxStablePtrId;
 use cairo_lang_utils::ordered_hash_map::OrderedHashMap;
 use cairo_lang_utils::{Intern, require};
 use itertools::{Itertools, chain, zip_eq};
@@ -14,12 +16,17 @@ use semantic::{ConcreteTypeId, ExprVarMemberPath, TypeLongId};
 use super::context::{LoweredExpr, LoweringContext, LoweringFlowError, LoweringResult, VarRequest};
 use super::generators;
 use super::generators::StatementsBuilder;
-use super::refs::{SemanticLoweringMapping, StructRecomposer, merge_semantics};
+use super::refs::{
+    AssembleValueError, MovedVar, SemanticLoweringMapping, StructRecomposer,
+    merge_semantics,
+};
 use crate::db::LoweringGroup;
 use crate::diagnostic::{LoweringDiagnosticKind, LoweringDiagnosticsBuilder};
 use crate::ids::LocationId;
 use crate::lower::refs::ClosureInfo;
-use crate::{Block, BlockEnd, BlockId, MatchInfo, Statement, VarRemapping, VarUsage, VariableId};
+use crate::{
+    Block, BlockEnd, BlockId, Location, MatchInfo, Statement, VarRemapping, VarUsage, VariableId,
+};
 
 /// Block builder, describing its current state.
 #[derive(Clone)]
@@ -77,27 +84,105 @@ impl<'db> BlockBuilder<'db> {
         );
     }
 
+    pub fn get_member_path_type(
+        &mut self,
+        ctx: &mut LoweringContext<'db, '_>,
+        member_path: &ExprVarMemberPath<'db>,
+    ) -> Option<semantic::TypeId<'db>> {
+        let stable_ptr = member_path.stable_ptr().untyped();
+        let location = ctx.get_location(stable_ptr);
+        let res = self.semantics.get(
+            BlockStructRecomposer { statements: &mut self.statements, ctx, location },
+            &member_path.into(),
+        );
+        match res {
+            Ok(var_id) => Some(ctx.variables[var_id].ty),
+            Err(AssembleValueError::Moved(MovedVar { ty, .. })) => Some(ty),
+            Err(AssembleValueError::Missing) => None,
+        }
+    }
+
     pub fn get_ref(
         &mut self,
         ctx: &mut LoweringContext<'db, '_>,
         member_path: &ExprVarMemberPath<'db>,
     ) -> Option<VarUsage<'db>> {
-        let location = ctx.get_location(member_path.stable_ptr().untyped());
-        self.get_ref_raw(ctx, &member_path.into(), location)
+        let stable_ptr = member_path.stable_ptr().untyped();
+        // println!("get_ref: {:?} --> {:?}", member_path.debug(ctx.expr_formatter.upcast()), res);
+        self.get_ref_raw(ctx, &member_path.into(), stable_ptr)
     }
 
     pub fn get_ref_raw(
         &mut self,
         ctx: &mut LoweringContext<'db, '_>,
         member_path: &MemberPath<'db>,
+        stable_ptr: SyntaxStablePtrId<'db>,
+    ) -> Option<VarUsage<'db>> {
+        let location = ctx.get_location(stable_ptr);
+
+        let res = self.semantics.get(
+            BlockStructRecomposer { statements: &mut self.statements, ctx, location },
+            &member_path,
+        );
+
+        match res {
+            Ok(var_id) => {
+                let var = &ctx.variables[var_id];
+                let copyable = var.info.copyable.clone();
+                let ty = var.ty;
+
+                if let Err(inference_error) = copyable {
+                    self.semantics.mark_as_used(
+                        BlockStructRecomposer { statements: &mut self.statements, ctx, location },
+                        member_path,
+                        MovedVar { ty, inference_error, last_use_location: location },
+                    );
+                }
+
+                Some(VarUsage { var_id, location })
+            }
+            Err(AssembleValueError::Moved(MovedVar { ty, inference_error, last_use_location })) => {
+                ctx.diagnostics.report_by_location(
+                    Location::new(StableLocation::new(stable_ptr))
+                        .add_note_with_location(
+                            ctx.db,
+                            "variable was previously used here",
+                            last_use_location,
+                        )
+                        .with_note(DiagnosticNote::text_only(
+                            inference_error.format(ctx.db.upcast()),
+                        )),
+                    LoweringDiagnosticKind::VariableMoved { inference_error },
+                );
+
+                // Create a dummy variable.
+                // TODO: Is the type correct?
+                let var_id = ctx.new_var(VarRequest { ty, location });
+                Some(VarUsage { var_id, location })
+            }
+            Err(AssembleValueError::Missing) => None,
+        }
+    }
+
+    // TODO: rename and document return value.
+    pub fn get_ref_for_remapping(
+        &mut self,
+        ctx: &mut LoweringContext<'db, '_>,
+        member_path: &MemberPath<'db>,
         location: LocationId<'db>,
     ) -> Option<VarUsage<'db>> {
-        self.semantics
-            .get(
-                BlockStructRecomposer { statements: &mut self.statements, ctx, location },
-                member_path,
-            )
-            .map(|var_id| VarUsage { var_id, location })
+        let res = self.semantics.get(
+            BlockStructRecomposer { statements: &mut self.statements, ctx, location },
+            member_path,
+        );
+
+        match res {
+            Ok(var_id) => Some(VarUsage { var_id, location }),
+            Err(AssembleValueError::Moved { .. }) => None,
+            Err(AssembleValueError::Missing) => {
+                unreachable!();
+            }
+        }
     }
 
     /// Introduces a semantic variable as the representation of the given member path.
@@ -351,11 +436,10 @@ impl<'db> SealedGotoCallsite<'db> {
         let mut remapping = VarRemapping::default();
         // Since SemanticRemapping should have unique variable ids, these asserts will pass.
         for (semantic, remapped_var) in semantic_remapping.member_path_value.iter() {
-            assert!(
-                remapping
-                    .insert(*remapped_var, builder.get_ref_raw(ctx, semantic, location).unwrap())
-                    .is_none()
-            );
+            // TODO: add comment.
+            if let Some(var_usage) = builder.get_ref_for_remapping(ctx, semantic, location) {
+                assert!(remapping.insert(*remapped_var, var_usage).is_none());
+            }
         }
         if let Some(remapped_var) = semantic_remapping.expr {
             let var_usage = expr.unwrap_or_else(|| {
@@ -392,6 +476,16 @@ impl<'db> StructRecomposer<'db> for BlockStructRecomposer<'_, '_, 'db> {
         let member_values =
             self.deconstruct_by_types(value, members.iter().map(|member| member.ty));
         OrderedHashMap::from_iter(zip_eq(member_ids, member_values))
+    }
+
+    fn deconstruct_used(
+        &mut self,
+        concrete_struct_id: semantic::ConcreteStructId<'db>,
+    ) -> Vec<Member<'db>> {
+        // TODO: refactor code.
+        let members = self.ctx.db.concrete_struct_members(concrete_struct_id).unwrap();
+
+        members.values().cloned().collect()
     }
 
     fn deconstruct_by_types(
@@ -435,7 +529,7 @@ impl<'db> StructRecomposer<'db> for BlockStructRecomposer<'_, '_, 'db> {
         self.ctx.variables[var].ty
     }
 
-    fn db(&self) -> &dyn LoweringGroup {
+    fn db(&self) -> &'db dyn LoweringGroup {
         self.ctx.db
     }
 }
